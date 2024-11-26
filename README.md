@@ -16,7 +16,7 @@ It allows users to provide custom prompts and select vision-capable models for g
 1. Clone the repository:
 
 ```bash
-git https://github.com/tristan-mcinnis/Ollama-Image-Processing-CLI-Tool
+git clone https://github.com/tristan-mcinnis/Ollama-Image-Processing-CLI-Tool
 cd image-processing-cli
 ```
 
