@@ -11,8 +11,9 @@ It allows users to provide custom prompts and select vision-capable models for g
 - Logs detailed progress with categorized feedback.
 - Saves results to timestamped output files.
 
+## CLI Showcase
+![image](https://github.com/user-attachments/assets/35f31676-d88a-41e6-9eae-ace8b4038756)
 
-![image](https://github.com/user-attachments/assets/5793f9e8-4d86-40f4-b759-c71e7191883e)
 
 
 ## Installation
