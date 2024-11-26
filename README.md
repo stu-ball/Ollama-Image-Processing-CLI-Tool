@@ -11,6 +11,10 @@ It allows users to provide custom prompts and select vision-capable models for g
 - Logs detailed progress with categorized feedback.
 - Saves results to timestamped output files.
 
+
+![image](https://github.com/user-attachments/assets/5793f9e8-4d86-40f4-b759-c71e7191883e)
+
+
 ## Installation
 
 1. Clone the repository:
