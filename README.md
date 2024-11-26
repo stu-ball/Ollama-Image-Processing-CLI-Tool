@@ -1,5 +1,5 @@
 
-# Ollama Image Processing CLI Tool
+# Image Processing CLI Tool
 
 This tool processes images from a specified directory or file using a local API for image analysis. 
 It allows users to provide custom prompts and select vision-capable models for generating image descriptions.
@@ -16,8 +16,8 @@ It allows users to provide custom prompts and select vision-capable models for g
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/tristan-mcinnis/Ollama-Image-Processing-CLI-Tool
-cd image-processing-cli
+git clone https://github.com/tristan-mcinnis/Ollama-Image-Processing-CLI-Tool.git
+cd Ollama-Image-Processing-CLI-Tool
 ```
 
 2. Install the required dependencies:
