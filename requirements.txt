@@ -1,6 +1,4 @@
 
-base64
-json
 requests
 Pillow
 rich

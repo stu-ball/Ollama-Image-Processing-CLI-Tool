@@ -125,7 +125,10 @@ def process_images(path, prompt, model):
             except Exception as e:
                 error_msg = f"Error processing {filepath}: {e}"
                 log_message("error", error_msg)
-                f.write(f"Error processing {filename}: {str(e)}\n\n")
+                try:
+                    f.write(f"Error processing {filename}: {str(e)}\n\n")
+                except NameError:
+                    f.write(f"Error processing image: {str(e)}\n\n")
 
     log_message("completion", f"Results saved to {output_file}")
     log_message("completion", "Image processing completed successfully!")
@@ -134,8 +137,9 @@ def get_available_models() -> List[str]:
     """Fetch available vision-capable models from Ollama"""
     # List of known vision-capable models
     vision_models = [
-        "llava", "llava-phi3", "llama3.2-vision", 
-        "bakllava", "cogvlm", "qwen-vl"
+        "llava", "llava-phi3", "llama3.2-vision",
+        "bakllava", "cogvlm", "qwen-vl",
+        "gemma3:4b", "gemma3"
     ]
     
     try:
@@ -160,22 +164,27 @@ def get_available_models() -> List[str]:
 
 def get_user_input():
     """Get user preferences for processing"""
+    print("\n[Image Analysis Configuration]")
+    # Fallback to non-interactive defaults if stdin is not a TTY
+    import sys
+    if not sys.stdin.isatty():
+        log_message("warning", "No interactive terminal detected. Using defaults.")
+        process_all = True
+        models = get_available_models()
+        selected_model = models[0] if models else "llava:latest"
+        prompt = "Describe this image, highlighting any notable details (including visible text):"
+        return process_all, selected_model, prompt
+
+    # Interactive mode as before
     console.print("\n[bold cyan]Image Analysis Configuration[/bold cyan]")
-    
-    # Ask for processing mode
     process_all = console.input("\nDo you want to analyze all images in the directory? (y/n): ").lower() == 'y'
-    
-    # Get available models
     models = get_available_models()
     if not models:
         log_message("warning", "Using default model 'llava:latest'. Please ensure it's installed.")
         return process_all, "llava:latest", None
-    
-    # Display available vision-capable models
     console.print("\n[bold]Available vision-capable models:[/bold]")
     for idx, model in enumerate(models, 1):
         console.print(f"{idx}. {model}")
-    
     while True:
         try:
             model_idx = int(console.input("\nSelect model number: ")) - 1
@@ -185,12 +194,9 @@ def get_user_input():
             console.print("[red]Invalid selection. Please try again.[/red]")
         except ValueError:
             console.print("[red]Please enter a valid number.[/red]")
-    
-    # Ask for custom prompt
     default_prompt = "Describe this image, highlighting any notable details (including visible text):"
     use_custom_prompt = console.input("\nDo you want to use a custom prompt? (y/n): ").lower() == 'y'
     prompt = console.input("\nEnter your custom prompt: ") if use_custom_prompt else default_prompt
-    
     return process_all, selected_model, prompt
 
 def select_image(path: str) -> str:
@@ -200,7 +206,7 @@ def select_image(path: str) -> str:
     
     if not image_files:
         log_message("error", "No images found in directory")
-        return None
+        return ""
     
     console.print("\n[bold]Available images:[/bold]")
     for idx, img in enumerate(image_files, 1):
@@ -226,15 +232,15 @@ if __name__ == "__main__":
         log_message("warning", f"Created directory: {image_path}")
 
     log_message("start", "Starting image processing application...")
-    
-    # Get user preferences
+
+    # Interactive configuration for model and prompt
     process_all, selected_model, custom_prompt = get_user_input()
-    
     if process_all:
         process_images(image_path, custom_prompt, selected_model)
     else:
+        # Allow user to select a single image
         selected_image = select_image(image_path)
         if selected_image:
             process_images(selected_image, custom_prompt, selected_model)
-    
+
     log_message("completion", "All tasks completed!")

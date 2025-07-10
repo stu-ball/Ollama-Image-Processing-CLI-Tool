@@ -1,0 +1,4 @@
+# Ignore the data directory where images are stored
+/data/
+# Ignore the outputs directory where results are saved
+/outputs/
