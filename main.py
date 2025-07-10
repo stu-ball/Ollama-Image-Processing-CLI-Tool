@@ -7,9 +7,12 @@ import io
 from rich.console import Console
 from rich.logging import RichHandler
 import logging
-import argparse
 from typing import List
 from datetime import datetime
+
+# Constants
+SUPPORTED_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.tif', '.heic', '.heif')
+DEFAULT_PROMPT = "Describe this image, highlighting any notable details (including visible text):"
 
 # Set up Rich console and logging
 console = Console()
@@ -22,7 +25,7 @@ logging.basicConfig(
 log = logging.getLogger("rich")
 
 # Helper: Log categories
-def log_message(category, message):
+def log_message(category: str, message: str) -> None:
     icons = {
         "start": "🚀",
         "progress": "🔄",
@@ -32,10 +35,10 @@ def log_message(category, message):
         "completion": "🎉"
     }
     icon = icons.get(category, "")
-    console.print(f"{icon} {message}")
+    log.info(f"{icon} {message}")
 
 # Encode image
-def encode_image(image_path):
+def encode_image(image_path: str) -> str:
     try:
         with Image.open(image_path) as img:
             img.thumbnail((800, 800))
@@ -48,7 +51,7 @@ def encode_image(image_path):
         raise
 
 # Generate image description
-def generate_image_description(image_path, prompt, model):
+def generate_image_description(image_path: str, prompt: str, model: str) -> str:
     base64_image = encode_image(image_path)
     payload = json.dumps({
         "model": model,
@@ -59,32 +62,41 @@ def generate_image_description(image_path, prompt, model):
     headers = {'Content-Type': 'application/json'}
     try:
         response = requests.post("http://localhost:11434/api/generate", headers=headers, data=payload)
-        response.raise_for_status()
-        
         if response.status_code == 400:
             log_message("error", f"Model {model} doesn't support image analysis. Please use a vision-capable model.")
             return "Error: Model doesn't support image analysis"
-            
+        response.raise_for_status()
         return response.json().get('response', "No response provided by API")
     except requests.exceptions.RequestException as e:
-        if "400 Client Error" in str(e):
-            log_message("error", f"Model {model} doesn't support image analysis. Please use a vision-capable model.")
-            return "Error: Model doesn't support image analysis"
         log_message("error", f"API call failed: {e}")
         raise
 
 # Process images
-def process_images(path, prompt, model):
-    # Create outputs directory if it doesn't exist
-    outputs_dir = "./outputs"
-    if not os.path.exists(outputs_dir):
-        os.makedirs(outputs_dir)
+def ensure_directory_exists(directory: str) -> None:
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+        log_message("warning", f"Created directory: {directory}")
 
-    supported_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.tif', '.heic', '.heif')
+def write_header(f, model: str, prompt: str) -> None:
+    f.write(f"Image Analysis Results\n")
+    f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    f.write(f"Model: {model}\n")
+    f.write(f"Prompt: {prompt}\n")
+    f.write("-" * 80 + "\n\n")
+
+def write_result(f, index: int, filename: str, description: str) -> None:
+    f.write(f"Image {index}: {filename}\n")
+    f.write(f"{description}\n")
+    f.write("-" * 80 + "\n\n")
+
+def process_images(path: str, prompt: str, model: str) -> None:
+    outputs_dir = "./outputs"
+    ensure_directory_exists(outputs_dir)
+
     if os.path.isfile(path):
-        image_files = [path] if path.lower().endswith(supported_extensions) else []
+        image_files = [path] if path.lower().endswith(SUPPORTED_EXTENSIONS) else []
     elif os.path.isdir(path):
-        image_files = [os.path.join(path, f) for f in os.listdir(path) if f.lower().endswith(supported_extensions)]
+        image_files = [os.path.join(path, f) for f in os.listdir(path) if f.lower().endswith(SUPPORTED_EXTENSIONS)]
     else:
         log_message("error", f"Invalid path: {path}")
         return
@@ -95,87 +107,63 @@ def process_images(path, prompt, model):
         log_message("warning", "No valid images found. Exiting.")
         return
 
-    # Create output file with timestamp
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     output_file = os.path.join(outputs_dir, f"{timestamp}.txt")
-    
-    with open(output_file, 'w', encoding='utf-8') as f:
-        # Write header information
-        f.write(f"Image Analysis Results\n")
-        f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"Model: {model}\n")
-        f.write(f"Prompt: {prompt}\n")
-        f.write("-" * 80 + "\n\n")
 
+    with open(output_file, 'w', encoding='utf-8') as f:
+        write_header(f, model, prompt)
         for index, filepath in enumerate(image_files, start=1):
             try:
                 filename = os.path.basename(filepath)
                 log_message("progress", f"Processing image {index}/{total_images}: {filename}")
                 description = generate_image_description(filepath, prompt, model)
-                
-                # Write to console
                 log_message("success", f"Description for {filename}:")
-                console.print(f"[yellow]{description}[/yellow]")
-                
-                # Write to file
-                f.write(f"Image {index}: {filename}\n")
-                f.write(f"{description}\n")
-                f.write("-" * 80 + "\n\n")
-                
+                log.info(f"[yellow]{description}[/yellow]")
+                write_result(f, index, filename, description)
             except Exception as e:
                 error_msg = f"Error processing {filepath}: {e}"
                 log_message("error", error_msg)
-                try:
-                    f.write(f"Error processing {filename}: {str(e)}\n\n")
-                except NameError:
-                    f.write(f"Error processing image: {str(e)}\n\n")
+                failed_filename = os.path.basename(filepath)
+                write_result(f, index, failed_filename, f"Error processing {failed_filename}: {str(e)}")
 
     log_message("completion", f"Results saved to {output_file}")
     log_message("completion", "Image processing completed successfully!")
 
 def get_available_models() -> List[str]:
     """Fetch available vision-capable models from Ollama"""
-    # List of known vision-capable models
     vision_models = [
         "llava", "llava-phi3", "llama3.2-vision",
         "bakllava", "cogvlm", "qwen-vl",
         "gemma3:4b", "gemma3"
     ]
-    
     try:
         response = requests.get("http://localhost:11434/api/tags")
         response.raise_for_status()
         all_models = [model['name'] for model in response.json().get('models', [])]
-        
-        # Filter for vision-capable models
         available_vision_models = [
-            model for model in all_models 
+            model for model in all_models
             if any(vision_model.lower() in model.lower() for vision_model in vision_models)
         ]
-        
         if not available_vision_models:
             log_message("warning", "No vision-capable models found. Please install a vision model like llava:latest")
             return []
-            
         return available_vision_models
     except requests.exceptions.RequestException as e:
         log_message("error", f"Failed to fetch models from Ollama: {e}")
         return []
 
-def get_user_input():
+def get_user_input() -> tuple:
     """Get user preferences for processing"""
-    print("\n[Image Analysis Configuration]")
-    # Fallback to non-interactive defaults if stdin is not a TTY
     import sys
+    print("\n[Image Analysis Configuration]")
     if not sys.stdin.isatty():
         log_message("warning", "No interactive terminal detected. Using defaults.")
         process_all = True
         models = get_available_models()
         selected_model = models[0] if models else "llava:latest"
-        prompt = "Describe this image, highlighting any notable details (including visible text):"
+        prompt = DEFAULT_PROMPT
         return process_all, selected_model, prompt
 
-    # Interactive mode as before
     console.print("\n[bold cyan]Image Analysis Configuration[/bold cyan]")
     process_all = console.input("\nDo you want to analyze all images in the directory? (y/n): ").lower() == 'y'
     models = get_available_models()
@@ -194,24 +182,22 @@ def get_user_input():
             console.print("[red]Invalid selection. Please try again.[/red]")
         except ValueError:
             console.print("[red]Please enter a valid number.[/red]")
-    default_prompt = "Describe this image, highlighting any notable details (including visible text):"
     use_custom_prompt = console.input("\nDo you want to use a custom prompt? (y/n): ").lower() == 'y'
-    prompt = console.input("\nEnter your custom prompt: ") if use_custom_prompt else default_prompt
+    prompt = console.input("\nEnter your custom prompt: ") if use_custom_prompt else DEFAULT_PROMPT
     return process_all, selected_model, prompt
 
 def select_image(path: str) -> str:
     """Allow user to select a single image from directory"""
-    supported_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.tif', '.heic', '.heif')
-    image_files = [f for f in os.listdir(path) if f.lower().endswith(supported_extensions)]
-    
+    image_files = [f for f in os.listdir(path) if f.lower().endswith(SUPPORTED_EXTENSIONS)]
+
     if not image_files:
         log_message("error", "No images found in directory")
         return ""
-    
+
     console.print("\n[bold]Available images:[/bold]")
     for idx, img in enumerate(image_files, 1):
         console.print(f"{idx}. {img}")
-    
+
     while True:
         try:
             img_idx = int(console.input("\nSelect image number: ")) - 1
@@ -226,10 +212,8 @@ if __name__ == "__main__":
     # Set default image path
     image_path = "./data"  # Default path
 
-    # Create data directory if it doesn't exist
-    if not os.path.exists(image_path):
-        os.makedirs(image_path)
-        log_message("warning", f"Created directory: {image_path}")
+    # Ensure data directory exists
+    ensure_directory_exists(image_path)
 
     log_message("start", "Starting image processing application...")
 
